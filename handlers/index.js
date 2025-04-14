@@ -6,6 +6,53 @@ const accountHandlers = require('./account');
 const groupHandlers = require('./group');
 
 /**
+ * Sistem referensi untuk optimalisasi callback data
+ * Mengatasi batasan 64 byte pada platform Telegram Bot API
+ */
+const callbackRefs = {
+  // Menyimpan referensi objek
+  refs: {},
+  
+  // Membuat referensi singkat dari pasangan sessionId & groupId
+  createRef(sessionId, groupId) {
+    // Menggunakan 6 karakter dari sessionId dan 4 karakter dari groupId
+    // dengan separator untuk menciptakan ID unik yang singkat
+    const sessionPart = sessionId.replace(/^session_/, '').slice(0, 6);
+    const groupPart = groupId.replace(/@.*$/, '').slice(-4);
+    const shortRef = `${sessionPart}:${groupPart}`;
+    
+    // Simpan referensi lengkap untuk dipanggil nanti
+    this.refs[shortRef] = {
+      sessionId,
+      groupId,
+      timestamp: Date.now()
+    };
+    
+    // Bersihkan referensi lama (>30 menit)
+    this.cleanup();
+    
+    return shortRef;
+  },
+  
+  // Mengambil referensi lengkap
+  getRef(shortRef) {
+    return this.refs[shortRef];
+  },
+  
+  // Membersihkan referensi lama
+  cleanup() {
+    const now = Date.now();
+    const expireTime = 30 * 60 * 1000; // 30 menit
+    
+    Object.keys(this.refs).forEach(key => {
+      if (now - this.refs[key].timestamp > expireTime) {
+        delete this.refs[key];
+      }
+    });
+  }
+};
+
+/**
  * Fungsi helper untuk escape karakter khusus dalam format HTML
  * @param {string} text - Text yang akan di-escape
  * @returns {string} - Text yang sudah di-escape
@@ -109,15 +156,46 @@ async function handleCallbacks(bot, callbackQuery, userStates) {
     }
     else if (data.startsWith('group_settings:')) {
       const [_, sessionId, groupId] = data.split(':');
-      await groupHandlers.handleGroupSettings(bot, chatId, messageId, sessionId, groupId);
+      await groupHandlers.handleGroupSettings(bot, chatId, messageId, sessionId, groupId, callbackRefs);
     }
-    else if (data.startsWith('toggle_announce:')) {
-      const [_, sessionId, groupId, value] = data.split(':');
-      await groupHandlers.handleToggleGroupSetting(bot, chatId, messageId, sessionId, groupId, 'announce', value === 'true');
+    // Handler untuk callback data teroptimasi
+    else if (data.startsWith('ta:') || data.startsWith('tr:')) {
+      const [code, ref, value] = data.split(':');
+      await groupHandlers.handleToggleGroupSetting(bot, chatId, messageId, ref, code, value, callbackRefs);
     }
-    else if (data.startsWith('toggle_restrict:')) {
-      const [_, sessionId, groupId, value] = data.split(':');
-      await groupHandlers.handleToggleGroupSetting(bot, chatId, messageId, sessionId, groupId, 'restrict', value === 'true');
+    else if (data.startsWith('gs:')) {
+      const [_, ref] = data.split(':');
+      const refData = callbackRefs.getRef(ref);
+      
+      if (refData) {
+        await groupHandlers.handleGroupSettings(bot, chatId, messageId, refData.sessionId, refData.groupId, callbackRefs);
+      } else {
+        await bot.sendMessage(chatId, '❌ *ERROR*\n\nReferensi tidak valid atau kedaluwarsa', {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔙 Kembali ke Menu Utama', callback_data: 'back_to_main' }]
+            ]
+          }
+        });
+      }
+    }
+    else if (data.startsWith('bk:')) {
+      const [_, ref] = data.split(':');
+      const refData = callbackRefs.getRef(ref);
+      
+      if (refData) {
+        await groupHandlers.handleSelectGroup(bot, chatId, messageId, refData.sessionId, refData.groupId);
+      } else {
+        await bot.sendMessage(chatId, '❌ *ERROR*\n\nReferensi tidak valid atau kedaluwarsa', {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔙 Kembali ke Menu Utama', callback_data: 'back_to_main' }]
+            ]
+          }
+        });
+      }
     }
     else if (data.startsWith('manage_members:')) {
       const [_, sessionId, groupId] = data.split(':');
@@ -235,5 +313,6 @@ async function handleError(bot, chatId, error) {
 
 module.exports = {
   handleCallbacks,
-  handleError
+  handleError,
+  callbackRefs  // Expose callbackRefs for use in other modules
 };
