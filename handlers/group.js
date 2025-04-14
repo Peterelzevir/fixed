@@ -469,7 +469,7 @@ async function handleGetGroupLink(bot, chatId, messageId, sessionId, groupId) {
  * @param {string} sessionId - ID session WhatsApp
  * @param {string} groupId - ID grup WhatsApp
  */
-async function handleGroupSettings(bot, chatId, messageId, sessionId, groupId) {
+async function handleGroupSettings(bot, chatId, messageId, sessionId, groupId, callbackRefs) {
   const session = getWhatsAppSession(sessionId);
   
   if (!session || !session.connected) {
@@ -486,17 +486,20 @@ async function handleGroupSettings(bot, chatId, messageId, sessionId, groupId) {
     return;
   }
   
+  // Buat referensi singkat untuk data callback
+  const ref = callbackRefs.createRef(sessionId, groupId);
+  
   await bot.editMessageText('⚙️ *PENGATURAN GRUP*\n\nPilih pengaturan yang ingin diubah:', {
     chat_id: chatId,
     message_id: messageId,
     parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🔒 Hanya Admin yang Dapat Mengirim Pesan', callback_data: `toggle_announce:${sessionId}:${groupId}:true` }],
-        [{ text: '🔓 Semua Anggota Dapat Mengirim Pesan', callback_data: `toggle_announce:${sessionId}:${groupId}:false` }],
-        [{ text: '🔒 Hanya Admin yang Dapat Mengubah Info Grup', callback_data: `toggle_restrict:${sessionId}:${groupId}:true` }],
-        [{ text: '🔓 Semua Anggota Dapat Mengubah Info Grup', callback_data: `toggle_restrict:${sessionId}:${groupId}:false` }],
-        [{ text: '🔙 Kembali ke Grup', callback_data: `back_to_group:${sessionId}:${groupId}` }]
+        [{ text: '🔒 Hanya Admin yang Dapat Mengirim Pesan', callback_data: `ta:${ref}:1` }],
+        [{ text: '🔓 Semua Anggota Dapat Mengirim Pesan', callback_data: `ta:${ref}:0` }],
+        [{ text: '🔒 Hanya Admin yang Dapat Mengubah Info Grup', callback_data: `tr:${ref}:1` }],
+        [{ text: '🔓 Semua Anggota Dapat Mengubah Info Grup', callback_data: `tr:${ref}:0` }],
+        [{ text: '🔙 Kembali ke Grup', callback_data: `bk:${ref}` }]
       ]
     }
   });
@@ -637,16 +640,31 @@ async function handleRenameGroup(bot, chatId, messageId, sessionId, groupId, use
  * @param {string} setting - Pengaturan yang diubah ('announce' atau 'restrict')
  * @param {boolean} value - Nilai pengaturan
  */
-async function handleToggleGroupSetting(bot, chatId, messageId, sessionId, groupId, setting, value) {
+async function handleToggleGroupSetting(bot, chatId, messageId, ref, setting, value, callbackRefs) {
   try {
+    // Ambil data referensi lengkap
+    const refData = callbackRefs.getRef(ref);
+    
+    if (!refData) {
+      throw new Error('Referensi tidak valid atau kedaluwarsa');
+    }
+    
+    const { sessionId, groupId } = refData;
+    
     await bot.editMessageText('⏳ *MENGUBAH PENGATURAN*\n\nSedang mengubah pengaturan grup...', {
       chat_id: chatId,
       message_id: messageId,
       parse_mode: 'Markdown'
     });
 
+    // Konversi kode singkat ke setting lengkap
+    const settingMap = {
+      'ta': 'announce',
+      'tr': 'restrict'
+    };
+    
     const settings = {};
-    settings[setting] = value === true || value === 'true';
+    settings[settingMap[setting]] = value === '1' || value === 1;
 
     // Tambahkan timeout untuk mencegah hanging
     const timeoutPromise = new Promise((_, reject) => 
@@ -659,11 +677,11 @@ async function handleToggleGroupSetting(bot, chatId, messageId, sessionId, group
       timeoutPromise
     ]);
     
-    const settingName = setting === 'announce' 
+    const settingName = setting === 'ta' 
       ? 'Pengaturan Pesan' 
       : 'Pengaturan Info Grup';
     
-    const settingStatus = settings[setting]
+    const settingStatus = settings[settingMap[setting]]
       ? 'dikunci (hanya admin)' 
       : 'dibuka (semua anggota)';
 
@@ -673,8 +691,8 @@ async function handleToggleGroupSetting(bot, chatId, messageId, sessionId, group
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '⚙️ Pengaturan Lainnya', callback_data: `group_settings:${sessionId}:${groupId}` }],
-          [{ text: '🔙 Kembali ke Grup', callback_data: `back_to_group:${sessionId}:${groupId}` }]
+          [{ text: '⚙️ Pengaturan Lainnya', callback_data: `gs:${ref}` }],
+          [{ text: '🔙 Kembali ke Grup', callback_data: `bk:${ref}` }]
         ]
       }
     });
@@ -685,7 +703,7 @@ async function handleToggleGroupSetting(bot, chatId, messageId, sessionId, group
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🔙 Kembali ke Pengaturan', callback_data: `group_settings:${sessionId}:${groupId}` }]
+          [{ text: '🔙 Kembali ke Menu Utama', callback_data: 'back_to_main' }]
         ]
       }
     });
