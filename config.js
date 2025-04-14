@@ -6,7 +6,7 @@ const path = require('path');
 
 module.exports = {
   // Token API Telegram Bot dari BotFather
-  TELEGRAM_BOT_TOKEN: '8068335875:AAGnCBR7AxsXdr5PmX1wZBelZIcZ8bP2kcM',
+  TELEGRAM_BOT_TOKEN: '8068335875:AAG_9YM9tJIuHMqoEPDtK9J3RqEFctUV7_E',
   
   // Daftar User ID Telegram yang memiliki akses admin
   // Format: array of numbers
