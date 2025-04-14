@@ -11,7 +11,8 @@ module.exports = {
   // Daftar User ID Telegram yang memiliki akses admin
   // Format: array of numbers
   ADMIN_IDS: [
-    5988451717, // Ganti dengan User ID admin Telegram Anda
+    5988451717,
+    7432744665, // Ganti dengan User ID admin Telegram Anda
     // Tambahkan ID admin lainnya di sini jika diperlukan
   ],
   
