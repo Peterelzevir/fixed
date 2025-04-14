@@ -63,7 +63,7 @@ async function handleAddAccount(bot, chatId, messageId, userStates) {
  * @param {Object} userStates - Objek state pengguna
  */
 async function handleConnectWithQR(bot, chatId, messageId, userStates) {
-  const sessionId = `session_${Date.now()}`;
+  const sessionId = `session-${Date.now()}`;
   userStates[chatId] = { 
     state: 'waiting_qr_scan',
     sessionId
